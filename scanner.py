@@ -1,0 +1,144 @@
+import os 
+script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+class Token:
+    def __init__(self, lexeme, category):
+        self.lexeme = lexeme
+        self.category = category
+
+symbol_to_index = {
+   'WHITESPACE': 0,
+   'DIGIT': 1,
+   'LETTER': 2,
+   'SYMBOL': 3
+}
+
+state_to_token = {
+    5: 'INTEGER',
+    6: 'IDENTIFIER',
+    7: 'SYMBOL',
+    8: 'KEYWORDS'
+}
+
+# x = x + 1
+token_dfa = [
+    # whitespace digit letter symbol 
+    [1, 2, 3, 7], # initial state
+    [1, None, None, None], # state 1 white space
+    [5, 2, None, None, None], # state 2 digit 
+    [6, 3, 3, 6], # state 3 letter
+    [7, 7, 7, 7], # state 5 symbol
+    [None, None, None, None], # INTEGER
+    [None, None, None, None], # IDENTIFIER
+    [None, None, None, None], # SYMBOL
+    [None], # INVALID INTEGER
+]
+
+class Scanner:
+
+    def __init__(self, file, buffer_size = 8192):
+        self.buffer_size = buffer_size
+        self.file = file
+        self.file_pointer = 0
+        self.source_text = None
+        self.valid_states = [5, 6, 7]
+        self.letters = {chr(i) for i in range(65, 91)} | {chr(i) for i in range(97, 123)}
+        self.digits = {str(i) for i in range(0, 10)}
+        self.symbols = {',', ';', '_', ':', '[', ']', '(', ')', '{', '}', '+', '-', '<', '=', '.'}
+        self.whitespaces = {' ', '\r', '\t', '\v', '\f', '\n'} 
+        self.valid_token = {}
+        self.keywords = [
+            "if",           # 0
+            "else",         # 1
+            "void",         # 2
+            "int",          # 3
+            "while",        # 4
+            "break",        # 5
+            "continue",     # 6
+            "switch",       # 7
+            "default",      # 8
+            "case",         # 9
+            "return",       # 10
+            "def"           # 11
+        ]
+
+    def read_file(self):
+        with open(self.file, "rb") as source_file:
+            source_file.seek(self.file_pointer)
+            buffer = source_file.read(self.buffer_size)
+
+        if not buffer:
+            raise ValueError('Invalid source')
+        
+        self.file_pointer += self.buffer_size
+        self.source_text = buffer.decode()
+
+    def dfa_transit(self):
+        ...
+
+    def get_syntax_category(self):
+        ...
+    
+    # convert char to related index
+    def get_char_index_dfa(self, char):
+        if char in self.letters:
+            return symbol_to_index['LETTER']
+        if char in self.digits:
+            return symbol_to_index['DIGIT']
+        if char in self.symbols:
+            return symbol_to_index['SYMBOL']
+        if char in self.whitespaces:
+            return symbol_to_index['WHITESPACE']
+    
+    def next(self):
+        if not self.source_text:
+            self.read_file()
+        while True:
+            if not self.source_text:
+                self.read_file()
+            current_state = 0
+            f_star = [7] ## state which resulted in None state but indicate valid state
+            if not self.source_text:
+                break 
+            
+            valid_token = []
+            for index in range(len(self.source_text) + 3):
+                try:   
+                    char = self.source_text[index]
+                except:
+                    char = ' '
+                char_index_dfa = self.get_char_index_dfa(char)
+                next_state = token_dfa[current_state][char_index_dfa]
+
+                if current_state in self.valid_states:
+                    token = self.source_text[:index-1]
+                    if current_state in f_star:
+                        token = self.source_text[:index]
+                    valid_token.append(token)
+                    
+                
+                if not next_state:
+                    if current_state not in self.valid_states:
+                        self.source_text = self.source_text[index:]
+                    break
+                current_state = next_state
+
+            if valid_token:
+                lexeme = valid_token[-1]
+                token = state_to_token[current_state]
+                if lexeme in self.keywords:
+                    token = state_to_token[8]
+                self.valid_token.update({
+                    lexeme: token
+                })
+                self.source_text = self.source_text[len(lexeme):]
+                return
+                
+
+s = Scanner('source.txt')
+while True:
+    try:
+        s.next()
+    except:
+        break
+print(s.valid_token)
